@@ -3,6 +3,14 @@
 #include <signal.h>
 #include <string.h>
 
+/* Structures used from sikradio.h:
+ * - config_t: stores the parsed command-line configuration used to
+ *   initialize logging and to drive the main client logic.
+ */
+
+/* Program entry point coordinating the high-level startup flow.
+ * It installs SIGPIPE handling, parses arguments, initializes the logging
+ * threshold, runs the client, and finally releases configuration resources. */
 int main(int argc, char **argv)
 {
     config_t config;

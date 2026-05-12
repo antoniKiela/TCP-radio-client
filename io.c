@@ -119,6 +119,10 @@ void log_timestamp(void)
     time_t now;
     struct tm *tm_info;
 
+    if (g_verbosity < LOG_COMMUNICATION) {
+        return;
+    }
+
     now = time(NULL);
     if (now == (time_t)-1) {
         return;

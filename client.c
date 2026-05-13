@@ -18,8 +18,11 @@ int client_run(const config_t *config)
     char errbuf[ERRBUF_SIZE];
     conn_t conn;
     http_response_t response;
+    const char *metaint_header;
     unsigned char *request;
     size_t request_len;
+    ssize_t metaint;
+    stream_result_t stream_result;
     url_t url;
 
     if (config == NULL) {
@@ -33,6 +36,7 @@ int client_run(const config_t *config)
     memset(&response, 0, sizeof(response));
     request = NULL;
     request_len = 0;
+    metaint = -1;
     memset(&url, 0, sizeof(url));
 
     if (url_parse(config->url, &url, errbuf, sizeof(errbuf)) != 0) {
@@ -94,8 +98,26 @@ int client_run(const config_t *config)
         return 1;
     }
 
+    metaint_header = http_header_get(&response, "icy-metaint");
+    if (metaint_header != NULL) {
+        char *endptr;
+        long parsed_metaint;
+
+        parsed_metaint = strtol(metaint_header, &endptr, 10);
+        if (endptr != metaint_header && *endptr == '\0' && parsed_metaint > 0) {
+            metaint = (ssize_t)parsed_metaint;
+        }
+    }
+
+    stream_result = stream_receive(&conn, response.body_prefix, response.body_prefix_len,
+                                   metaint, config);
     http_response_free(&response);
     conn_close(&conn);
     url_free(&url);
-    return 0;
+
+    if (stream_result == STREAM_SERVER_CLOSED) {
+        return 0;
+    }
+
+    return 1;
 }

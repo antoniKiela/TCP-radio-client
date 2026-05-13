@@ -1,5 +1,6 @@
 #include "sikradio.h"
 
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -103,8 +104,10 @@ int client_run(const config_t *config)
         char *endptr;
         long parsed_metaint;
 
+        errno = 0;
         parsed_metaint = strtol(metaint_header, &endptr, 10);
-        if (endptr != metaint_header && *endptr == '\0' && parsed_metaint > 0) {
+        if (errno == 0 && endptr != metaint_header &&
+            *endptr == '\0' && parsed_metaint > 0) {
             metaint = (ssize_t)parsed_metaint;
         }
     }

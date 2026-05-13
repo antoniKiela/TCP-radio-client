@@ -17,6 +17,7 @@ int client_run(const config_t *config)
 {
     char errbuf[ERRBUF_SIZE];
     conn_t conn;
+    http_response_t response;
     unsigned char *request;
     size_t request_len;
     url_t url;
@@ -29,6 +30,7 @@ int client_run(const config_t *config)
     memset(errbuf, 0, sizeof(errbuf));
     memset(&conn, 0, sizeof(conn));
     conn.fd = -1;
+    memset(&response, 0, sizeof(response));
     request = NULL;
     request_len = 0;
     memset(&url, 0, sizeof(url));
@@ -73,6 +75,26 @@ int client_run(const config_t *config)
     }
 
     free(request);
+    memset(errbuf, 0, sizeof(errbuf));
+    if (http_read_response(&conn, config->timeout_ms, &response, errbuf, sizeof(errbuf)) != 0) {
+        conn_close(&conn);
+        url_free(&url);
+        if (errbuf[0] != '\0') {
+            write_stderr_line(errbuf);
+        } else {
+            write_stderr_line("reading HTTP response failed");
+        }
+        return 1;
+    }
+
+    if (response.status_code != 200) {
+        http_response_free(&response);
+        conn_close(&conn);
+        url_free(&url);
+        return 1;
+    }
+
+    http_response_free(&response);
     conn_close(&conn);
     url_free(&url);
     return 0;

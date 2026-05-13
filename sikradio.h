@@ -118,7 +118,6 @@ void log_metadata(const unsigned char *buf, size_t len);
 int conn_open(conn_t *conn, const url_t *url, ip_mode_t ip_mode, char *errbuf, size_t errlen);
 ssize_t conn_read(conn_t *conn, unsigned char *buf, size_t len);
 int conn_write_all(conn_t *conn, const unsigned char *buf, size_t len);
-int conn_fd(const conn_t *conn);
 void conn_close(conn_t *conn);
 
 /* Implemented in http.c */

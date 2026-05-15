@@ -415,13 +415,38 @@ int http_is_redirect(int status_code)
            status_code == 307 || status_code == 308;
 }
 
-/* Public cookie extraction placeholder for a later roadmap step.
- * It currently keeps the signature stable but does not parse cookies yet. */
+/* Public cookie extraction helper used by redirect handling.
+ * It keeps only the first Set-Cookie value fragment up to the first ';'
+ * and replaces the caller-owned cookie string when one is present. */
 int http_extract_cookie(const http_response_t *response, char **cookie_in_out)
 {
-    (void)response;
-    (void)cookie_in_out;
+    const char *set_cookie;
+    const char *cookie_end;
+    char *cookie_copy;
 
+    if (cookie_in_out == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    set_cookie = http_header_get(response, "Set-Cookie");
+    if (set_cookie == NULL) {
+        return 0;
+    }
+
+    cookie_end = strchr(set_cookie, ';');
+    if (cookie_end == NULL) {
+        cookie_end = set_cookie + strlen(set_cookie);
+    }
+
+    cookie_copy = duplicate_range(set_cookie, (size_t)(cookie_end - set_cookie));
+    if (cookie_copy == NULL) {
+        errno = ENOMEM;
+        return -1;
+    }
+
+    free(*cookie_in_out);
+    *cookie_in_out = cookie_copy;
     return 0;
 }
 

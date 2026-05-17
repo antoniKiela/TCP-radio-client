@@ -4,6 +4,15 @@
 #include <stdlib.h>
 #include <string.h>
 
+static void log_critical_error(const char *message, const char *fallback)
+{
+    if (message != NULL && message[0] != '\0') {
+        log_msg(LOG_CRITICAL, "%s", message);
+    } else if (fallback != NULL) {
+        log_msg(LOG_CRITICAL, "%s", fallback);
+    }
+}
+
 /* Structures used from sikradio.h:
  * - config_t: provides the original URL string chosen by argument parsing.
  * - url_t: stores the parsed form of that URL for early validation.
@@ -21,7 +30,7 @@ int client_run(const config_t *config)
     int status;
 
     if (config == NULL) {
-        write_stderr_line("internal error: missing client configuration");
+        log_critical_error(NULL, "internal error: missing client configuration");
         return 1;
     }
 
@@ -53,11 +62,7 @@ int client_run(const config_t *config)
         memset(errbuf, 0, sizeof(errbuf));
 
         if (url_parse(config->url, &current_url, errbuf, sizeof(errbuf)) != 0) {
-            if (errbuf[0] != '\0') {
-                write_stderr_line(errbuf);
-            } else {
-                write_stderr_line("invalid URL");
-            }
+            log_critical_error(errbuf, "invalid URL");
             free(cookie);
             return 1;
         }
@@ -72,17 +77,13 @@ int client_run(const config_t *config)
             memset(errbuf, 0, sizeof(errbuf));
 
             if (conn_open(&conn, &current_url, config->ip_mode, errbuf, sizeof(errbuf)) != 0) {
-                if (errbuf[0] != '\0') {
-                    write_stderr_line(errbuf);
-                } else {
-                    write_stderr_line("connection failed");
-                }
+                log_critical_error(errbuf, "connection failed");
                 break;
             }
 
             if (http_build_request(&current_url, config->want_metadata, cookie,
                                    &request, &request_len) != 0) {
-                write_stderr_line("building HTTP request failed");
+                log_critical_error(NULL, "building HTTP request failed");
                 break;
             }
 
@@ -91,7 +92,7 @@ int client_run(const config_t *config)
             }
 
             if (conn_write_all(&conn, request, request_len) != 0) {
-                write_stderr_line("sending HTTP request failed");
+                log_critical_error(NULL, "sending HTTP request failed");
                 break;
             }
             free(request);
@@ -99,11 +100,7 @@ int client_run(const config_t *config)
 
             memset(errbuf, 0, sizeof(errbuf));
             if (http_read_response(&conn, config->timeout_ms, &response, errbuf, sizeof(errbuf)) != 0) {
-                if (errbuf[0] != '\0') {
-                    write_stderr_line(errbuf);
-                } else {
-                    write_stderr_line("reading HTTP response failed");
-                }
+                log_critical_error(errbuf, "reading HTTP response failed");
                 break;
             }
 
@@ -112,18 +109,18 @@ int client_run(const config_t *config)
                 url_t next_url;
 
                 if (redirect_count == MAX_REDIRECTS) {
-                    write_stderr_line("too many redirects");
+                    log_critical_error(NULL, "too many redirects");
                     break;
                 }
 
                 if (http_extract_cookie(&response, &cookie) != 0) {
-                    write_stderr_line("extracting cookie failed");
+                    log_critical_error(NULL, "extracting cookie failed");
                     break;
                 }
 
                 location = http_header_get(&response, "Location");
                 if (location == NULL) {
-                    write_stderr_line("redirect response missing Location");
+                    log_critical_error(NULL, "redirect response missing Location");
                     break;
                 }
 
@@ -131,11 +128,7 @@ int client_run(const config_t *config)
                 memset(errbuf, 0, sizeof(errbuf));
                 if (url_resolve_redirect(&current_url, location, &next_url,
                                          errbuf, sizeof(errbuf)) != 0) {
-                    if (errbuf[0] != '\0') {
-                        write_stderr_line(errbuf);
-                    } else {
-                        write_stderr_line("invalid redirect location");
-                    }
+                    log_critical_error(errbuf, "invalid redirect location");
                     break;
                 }
 

@@ -125,8 +125,7 @@ static int stdin_read_ready(unsigned char *read_buf, size_t read_buf_size,
             return 0;
         }
 
-        *watch_stdin = 0;
-        return 0;
+        return -1;
     }
     if (stdin_rc == 0) {
         *watch_stdin = 0;

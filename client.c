@@ -169,6 +169,8 @@ int client_run(const config_t *config)
             if (stream_result == STREAM_TIMEOUT) {
                 log_msg(LOG_COMMUNICATION, "data receiving timeout");
                 restart_from_original = 1;
+            } else if (stream_result == STREAM_QUIT) {
+                status = 0;
             } else if (stream_result == STREAM_SERVER_CLOSED) {
                 status = 0;
             }

@@ -382,6 +382,8 @@ int http_read_response(conn_t *conn, int timeout_ms, http_response_t *out,
         log_msg(LOG_COMMUNICATION, "%s: %s",
                 parsed.headers[i].name, parsed.headers[i].value);
     }
+    log_msg(LOG_COMMUNICATION, "");
+    log_msg(LOG_COMMUNICATION, "");
 
     *out = parsed;
     return 0;

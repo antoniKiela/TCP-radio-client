@@ -89,6 +89,7 @@ int client_run(const config_t *config)
 
             if (config->verbosity >= LOG_COMMUNICATION) {
                 write_stderr_bytes(request, request_len);
+                write_stderr_line("");
             }
 
             if (conn_write_all(&conn, request, request_len) != 0) {

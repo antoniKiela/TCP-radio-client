@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Chooses the best available critical error message so the higher-level
+ * client flow can keep its cleanup logic separate from logging decisions. */
 static void log_critical_error(const char *message, const char *fallback)
 {
     if (message != NULL && message[0] != '\0') {
@@ -15,14 +17,16 @@ static void log_critical_error(const char *message, const char *fallback)
 
 /* Structures used from sikradio.h:
  * - config_t: provides the original URL string chosen by argument parsing.
- * - url_t: stores the parsed form of that URL for early validation.
- * - conn_t: carries the temporary network connection opened in this step.
+ * - url_t: stores the current parsed URL, including redirect targets.
+ * - conn_t: carries the active plain or TLS connection for one request.
+ * - http_response_t: owns the parsed response headers and initial body bytes.
+ * - stream_result_t: tells the client whether to exit, reconnect, or fail.
  */
 
-/* Minimal client entry point for the current roadmap step.
- * At this stage it validates the configured URL, follows HTTP redirects,
- * carries a simple cookie across them, reconnects from the original URL
- * after stream timeouts, and frees temporary state before returning. */
+/* High-level client entry point coordinating the full runtime flow.
+ * It validates the original URL, follows redirects, carries cookies between
+ * requests, restarts from the original URL after timeouts, and converts the
+ * lower-level streaming outcomes into the final process exit status. */
 int client_run(const config_t *config)
 {
     char errbuf[ERRBUF_SIZE];

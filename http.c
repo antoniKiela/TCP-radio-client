@@ -11,8 +11,8 @@
 
 /* Structures used from sikradio.h:
  * - url_t: provides the request target and host used to build HTTP GET.
- * - http_response_t: stores parsed response state for later roadmap steps.
- * - conn_t: will carry the active connection when response parsing is added.
+ * - http_response_t: owns the parsed status line, headers, and body prefix.
+ * - conn_t: carries the active plain or TLS connection being read here.
  */
 
 /* Helper for http_read_response() and http_response_free():
@@ -233,9 +233,8 @@ int http_build_request(const url_t *url, int want_metadata, const char *cookie,
     return 0;
 }
 
-/* Public response reader placeholder for the current roadmap state.
- * It reads through the end of HTTP/ICY headers, parses status and headers,
- * keeps any already received body bytes, and logs the parsed response. */
+/* Reads one HTTP or ICY response up to the end of the headers, while also
+ * preserving any already received body bytes for the streaming layer. */
 int http_read_response(conn_t *conn, int timeout_ms, http_response_t *out,
                        char *errbuf, size_t errlen)
 {

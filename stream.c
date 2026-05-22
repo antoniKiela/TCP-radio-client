@@ -9,11 +9,21 @@
 #include <time.h>
 #include <unistd.h>
 
+/* Structures used from sikradio.h:
+ * - conn_t: provides the already opened plain or TLS connection to the server.
+ * - config_t: carries the configured timeout used by the polling loop.
+ * - icy_demuxer_t: is created only when the response uses icy-metaint.
+ * - stream_result_t: reports whether the stream ended normally, by timeout,
+ *   by user quit, or because of an error.
+ */
+
 enum {
     STDIN_LINE_BUFFER_SIZE = 256,
     STDIN_READ_BUFFER_SIZE = 64
 };
 
+/* For TLS connections, decrypted bytes can already be buffered in OpenSSL,
+ * so the receive loop should consume them before waiting in poll(). */
 static int conn_has_pending_data(const conn_t *conn)
 {
     SSL *ssl;
@@ -30,6 +40,8 @@ static int conn_has_pending_data(const conn_t *conn)
     return SSL_pending(ssl) > 0;
 }
 
+/* Returns a monotonic timestamp in milliseconds so timeout accounting does
+ * not depend on wall-clock adjustments. */
 static long long monotonic_time_ms(void)
 {
     struct timespec ts;
@@ -41,6 +53,8 @@ static long long monotonic_time_ms(void)
     return (long long)ts.tv_sec * 1000LL + (long long)(ts.tv_nsec / 1000000L);
 }
 
+/* Computes how much time is left before the configured receive timeout
+ * expires, based only on the last successfully received server bytes. */
 static int remaining_timeout_ms(long long last_data_ms, int timeout_ms)
 {
     long long now;
@@ -62,6 +76,8 @@ static int remaining_timeout_ms(long long last_data_ms, int timeout_ms)
     return timeout_ms - (int)elapsed;
 }
 
+/* Appends stdin bytes to the current line buffer and returns 1 only when
+ * a complete line equal to "quit" has been observed. */
 static int stdin_consume_bytes(const unsigned char *buf, size_t len,
                                unsigned char *line_buf, size_t *line_len,
                                int *line_overflow)
@@ -106,6 +122,8 @@ static int stdin_consume_bytes(const unsigned char *buf, size_t len,
     return 0;
 }
 
+/* Reads one ready chunk from stdin, updates the buffered line state, and
+ * disables further stdin polling once end-of-file is reached. */
 static int stdin_read_ready(unsigned char *read_buf, size_t read_buf_size,
                             unsigned char *line_buf, size_t *line_len,
                             int *line_overflow, int *watch_stdin)
@@ -141,6 +159,13 @@ static int stdin_read_ready(unsigned char *read_buf, size_t read_buf_size,
     return consume_rc > 0 ? 1 : 0;
 }
 
+/* Main streaming loop used after a successful 200/ICY 200 response.
+ * It writes any body bytes already received with the headers, then polls the
+ * network connection and stdin to handle audio, ICY metadata, timeouts, and
+ * the "quit" command without mixing audio into stderr output.
+ * This function intentionally uses goto cleanup to keep the many early-exit
+ * paths visually simple while still funneling all shared cleanup through one
+ * final block. */
 stream_result_t stream_receive(conn_t *conn, const unsigned char *body_prefix,
                                size_t body_prefix_len, ssize_t metaint,
                                const config_t *config)

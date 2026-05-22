@@ -101,6 +101,11 @@ int client_run(const config_t *config)
 
             memset(errbuf, 0, sizeof(errbuf));
             if (http_read_response(&conn, config->timeout_ms, &response, errbuf, sizeof(errbuf)) != 0) {
+                if (strcmp(errbuf, "data receiving timeout") == 0) {
+                    log_msg(LOG_COMMUNICATION, "data receiving timeout");
+                    restart_from_original = 1;
+                    break;
+                }
                 log_critical_error(errbuf, "reading HTTP response failed");
                 break;
             }

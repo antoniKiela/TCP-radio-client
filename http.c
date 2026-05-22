@@ -2,10 +2,12 @@
 
 #include <ctype.h>
 #include <errno.h>
+#include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <openssl/ssl.h>
 
 /* Structures used from sikradio.h:
  * - url_t: provides the request target and host used to build HTTP GET.
@@ -81,6 +83,25 @@ static size_t find_header_end(const unsigned char *buf, size_t len)
     }
 
     return (size_t)-1;
+}
+
+/* Helper for http_read_response():
+ * for TLS connections, already decrypted bytes may be buffered inside OpenSSL,
+ * so we must not wait in poll() when SSL_pending() reports ready data. */
+static int conn_has_pending_data(const conn_t *conn)
+{
+    SSL *ssl;
+
+    if (conn == NULL || !conn->use_tls) {
+        return 0;
+    }
+
+    ssl = (SSL *)conn->ssl;
+    if (ssl == NULL) {
+        return 0;
+    }
+
+    return SSL_pending(ssl) > 0;
 }
 
 /* Helper for http_read_response():
@@ -238,7 +259,6 @@ int http_read_response(conn_t *conn, int timeout_ms, http_response_t *out,
         return -1;
     }
 
-    (void)timeout_ms;
     http_response_reset(&parsed);
     http_response_reset(out);
     set_errbuf(errbuf, errlen, NULL);
@@ -253,6 +273,36 @@ int http_read_response(conn_t *conn, int timeout_ms, http_response_t *out,
     header_end = (size_t)-1;
     while (header_end == (size_t)-1) {
         ssize_t rc;
+
+        if (!conn_has_pending_data(conn)) {
+            struct pollfd pfd;
+            int poll_rc;
+
+            pfd.fd = conn->fd;
+            pfd.events = POLLIN;
+            pfd.revents = 0;
+
+            do {
+                poll_rc = poll(&pfd, 1, timeout_ms);
+            } while (poll_rc < 0 && errno == EINTR);
+
+            if (poll_rc < 0) {
+                free(raw);
+                set_errbuf(errbuf, errlen, "reading HTTP response failed");
+                return -1;
+            }
+            if (poll_rc == 0) {
+                free(raw);
+                errno = ETIMEDOUT;
+                set_errbuf(errbuf, errlen, "data receiving timeout");
+                return -1;
+            }
+            if ((pfd.revents & POLLNVAL) != 0) {
+                free(raw);
+                set_errbuf(errbuf, errlen, "reading HTTP response failed");
+                return -1;
+            }
+        }
 
         if (raw_len == MAX_HEADER_BYTES) {
             free(raw);
